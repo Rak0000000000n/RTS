@@ -1,0 +1,144 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class chose_mark_script : MonoBehaviour
+{
+    [Header("Отображение и состояние маркера")]
+    public bool on; // Флаг, определяющий, включен ли маркер.
+    public bool auto_mode = true; // Флаг, определяющий, в автоматическом режиме ли маркер.
+    private SpriteRenderer spriteRenderer; // Ссылка на компонент SpriteRenderer, отвечающий за отображение маркера.
+    private Vector3 initialScale = Vector3.one; // Начальный масштаб маркера.
+    private float startTime; // Время начала изменения масштаба маркера.
+    [Space(12)]
+
+    [Header("Вращение маркера")]
+    public float rotationSpeed = 10f; // Скорость вращения маркера в градусах в секунду.
+    public float rotationSpeedMultiplier = 2f; // Множитель, применяемый к rotationSpeed во время изменения масштаба.
+    private float currentRotationSpeed; // Текущая скорость вращения маркера, которая может изменяться во время изменения масштаба.
+    [Space(12)]
+
+    [Header("Пульсация маркера")]
+    public float pulseAmplitude = 0.1f; // Амплитуда пульсации маркера.
+    public float pulseFrequency = 1f; // Частота пульсации маркера.
+    public float minAlpha = 0.8f; // Минимальная непрозрачность маркера во время пульсации.
+    public float scaleSpeed = 2f; // Скорость изменения размера маркера.
+    public float scaleTime = 1f; // Время изменения размера маркера в секундах.
+
+    void Start()
+    {
+        transform.localScale = Vector3.zero;
+
+        Transform child = transform.Find("Crosshair_13");
+        spriteRenderer = child.GetComponent<SpriteRenderer>();
+
+        currentRotationSpeed = rotationSpeed;
+    }
+
+    void Update()
+    {
+        if (on)
+        {
+            UpdateScale(); // метод изменяет размер маркера в зависимости от того, активен маркер или нет
+            UpdateRotation(); // метод отвечает за вращение маркера, и за ускорение вращения, если размер маркера меньше 1
+            UpdatePulseAndAlpha(); // метод отвечает за пульсацию и мерцание маркера
+            //HandleInput();
+        }
+    }
+
+    /// <summary>
+    /// --------------------МЕТОДЫ РАБОТЫ КЛАВИШ--------------------
+    /// </summary>
+    // Метод появления и исчезновения маркера
+    // Я его использовал, чтобы проверить и отрегулировать появление и исчезновение маркеров, но сейчас он в программе не нужен
+    void HandleInput()
+    {
+        if (auto_mode == false && Input.GetKeyDown(KeyCode.Q))
+        {
+            // Увеличиваем размер до единичного
+            startTime = Time.time;
+            auto_mode = true;
+        }
+
+        if (auto_mode == true && Input.GetKeyDown(KeyCode.E))
+        {
+            // Уменьшаем размер до 0
+            startTime = Time.time;
+            auto_mode = false;
+        }
+    }
+
+    /// <summary>
+    /// --------------------МЕТОДЫ ЭФФЕКТОВ МАРКЕРА--------------------
+    /// </summary>
+
+    // метод изменяет размер маркера в зависимости от того, активен маркер или нет
+    void UpdateScale()
+    {
+        float t = (Time.time - startTime) / scaleTime;
+        if (auto_mode)
+        {
+            // Плавно увеличиваем размер до единичного за scaleTime секунд
+            transform.localScale = Vector3.Lerp(Vector3.zero, initialScale, t);
+        }
+        else
+        {
+            // Плавно уменьшаем размер до 0 за scaleTime секунд
+            transform.localScale = Vector3.Lerp(initialScale, Vector3.zero, t);
+        }
+    }
+
+    // метод отвечает за вращение маркера, и за ускорение вращения, если размер маркера меньше 1
+    void UpdateRotation()
+    {
+        if (auto_mode && (Time.time - startTime) / scaleTime < 0.8f)
+        {
+            // Вращаем с увеличенной скоростью во время изменения размера
+            currentRotationSpeed = rotationSpeed * rotationSpeedMultiplier;
+        }
+        // Вращение вокруг оси Y
+        transform.Rotate(Vector3.up * currentRotationSpeed * Time.deltaTime);
+    }
+    
+    // метод отвечает за пульсацию и мерцание маркера
+    void UpdatePulseAndAlpha()
+    {
+        // Если размер достиг единицы, включаем вращение, пульсацию и изменение непрозрачности
+        if (auto_mode && (Time.time - startTime) / scaleTime >= 1f)
+        {
+            // Пульсация
+            float pulse = Mathf.Sin(Time.time * pulseFrequency * 2 * Mathf.PI) * pulseAmplitude;
+            transform.localScale = initialScale + Vector3.one * pulse;
+
+            // Изменение непрозрачности
+            float alpha = Mathf.Lerp(minAlpha, 1f, Mathf.InverseLerp(-pulseAmplitude, pulseAmplitude, pulse));
+            spriteRenderer.color = new Color(spriteRenderer.color.r, spriteRenderer.color.g, spriteRenderer.color.b, alpha);
+        }
+    }
+
+    // публичный метод, повторяющий метод Start почти полностью. Он нужен для того, чтобы создаваемые через другой скрипт маркеры проигрывали эффект появления
+    public void SelectMark_begin()
+    {
+        on = true;
+
+        // Задаем начальный размер равным 0
+        transform.localScale = Vector3.zero;
+
+        // Начальная скорость вращения
+        currentRotationSpeed = rotationSpeed;
+
+        startTime = Time.time; // Запоминаем текущее время
+        auto_mode = true;
+    }
+
+    // публичный метод для плавного исчезновения маркера. Вызывается, когда тик-так касается маркера
+    public void SelectMark_end()
+    {
+        if (auto_mode)
+        {
+            // Уменьшаем размер до 0
+            startTime = Time.time; // Запоминаем текущее время
+            auto_mode = false;
+        }
+    }
+}
