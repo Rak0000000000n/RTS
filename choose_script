@@ -1,0 +1,32 @@
+using System.Collections;
+using System.Collections.Generic;
+using Unity.Burst.CompilerServices;
+using UnityEngine;
+
+public class choose_script : MonoBehaviour
+{
+    private cam_ray_script cr;
+    
+    void Start()
+    {
+        cr = Camera.main.GetComponent< cam_ray_script>();
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.gameObject.layer == LayerMask.NameToLayer("character"))
+        {
+            if (!cr.selectedCharacters.Contains(other.gameObject))
+            {
+                cr.selectedCharacters.Add(other.gameObject);
+            }
+            
+            // Включить на всех тик-таках маркер выбора
+            foreach (GameObject character in cr.selectedCharacters)
+            {
+                character.transform.Find("ch_mark").GetComponent<chose_mark_script>().on = true;
+                character.transform.Find("ch_mark").GetComponent<chose_mark_script>().auto_mode = true;
+            }
+        }
+    }
+}
