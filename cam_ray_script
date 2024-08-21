@@ -1,0 +1,287 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.TextCore.Text;
+
+public class cam_ray_script : MonoBehaviour
+{
+    [Header("Луч")]
+    public bool showLaserMark = true; // Флаг, определяющий, виден ли луч
+    public LayerMask ignoreLayers; // Слои, игнорируемые лучом при столкновении
+    public GameObject laserMarkPrefab; // префаб метки луча
+    private float laserRange = 100000; // Максимальная дистанция луча
+    private GameObject laserMark; // метка, указывающая на столкновение луча с поверхностями
+    private Color laserColor = Color.yellow; // Цвет луча
+    [Space(12)]
+
+    [Header("метка движения")]
+    public float MarksOffset; // Отступ по вертикали для метки перемещения и пространства выбора
+    public GameObject walkPointPrefab; // Префаб метки перемещения
+    public List<GameObject> selectedCharacters = new List<GameObject>(); // Список выбранных тик-таков
+    private GameObject walkPoint; // метка, к которой перемещаются выбранные тик-таки
+    [Space(12)]
+
+    [Header("Пространство выбора")]
+    public KeyCode selectionKey; // Клавиша (ЛКМ) применяется для выбора тик-така, создания области выбора и указания тик-таку точки перемещения
+    public GameObject selectionArePrefab; // Префаб области выделения
+    private GameObject selectionAre; // Область выделения
+    
+    // параметры для проверки одиночного нажатия клавиши выбора или удержания
+    private float selectionKeyPressStartTime = 0f; // Время нажатия клавиши выбора
+    private float holdTimeThreshold = 0.15f; // Порог времени для удержания клавиши
+
+    // камера
+    private Camera mainCamera; // Основная камера сцены
+    private Vector3 laserStartPosition; // Начальная позиция луча (задается по позиции камеры)
+    private Vector3 mousePos; // положение курсора
+
+    void Start()
+    {
+        mainCamera = Camera.main;
+    }
+
+    void Update()
+    {
+        mousePos = Input.mousePosition;
+
+        HandleLaser(); // Метод для обработки луча
+        HandleKeyPress(); // метод проверки нажатия клавиши выбора (однократного нажатия или удержания)
+        HandleRightClick(); // сброс выбора тик-таков
+    }
+
+    /// <summary>
+    /// --------------------МЕТОДЫ РАБОТЫ ЛУЧА--------------------
+    /// </summary>
+
+    // метод для обработки луча
+    private void HandleLaser()
+    {
+        Ray ray = mainCamera.ScreenPointToRay(mousePos); // Преобразование координат курсора в мировые координаты
+
+        RaycastHit hit;
+
+        // Проверка пересечения луча с объектами
+        if (Physics.Raycast(ray, out hit, laserRange, ~ignoreLayers))
+        {
+            VisualizeLaser(hit.point); // Метод для визуализации луча
+            ManageLaserMark(hit.point); // Метод для управления маркером луча
+        }
+        else DisableLaser(); // Метод для отключения визуализации и удаления маркера луча
+    }
+
+    // Метод для визуализации луча
+    private void VisualizeLaser(Vector3 hitPoint)
+    {
+        Debug.DrawLine(transform.position, hitPoint, laserColor, 0.01f);
+    }
+
+    // Метод для управления маркером луча
+    private void ManageLaserMark(Vector3 hitPoint)
+    {
+
+        // создаём маркер
+        if (laserMark == null)
+        {
+            laserMark = Instantiate(laserMarkPrefab, transform.position, Quaternion.identity);
+        }
+
+        // Установка позиции маркера в точку пересечения
+        laserMark.transform.position = hitPoint;
+
+        // Изменение прозрачности маркера
+        if (showLaserMark) laserMark.GetComponent<Renderer>().enabled = true;
+        else laserMark.GetComponent<Renderer>().enabled = false;
+    }
+
+    // метод уничтожения маркера лазера
+    private void DisableLaser()
+    {
+        // Отключение визуализации и удаление префаба
+        if (laserMark != null) Destroy(laserMark);
+    }
+
+    /// <summary>
+    /// --------------------МЕТОДЫ РАБОТЫ МАРКЕРА ПЕРЕМЕЩЕНИЯ--------------------
+    /// </summary>
+
+    // метод создания маркера перемещения для тик-таков
+    private void SpawnWalkPoint()
+    {
+        if (laserMark != null)
+        {
+            walkPoint = Instantiate(walkPointPrefab, laserMark.transform.position + Vector3.up * MarksOffset, Quaternion.identity);
+            walkPoint.GetComponent<test_target_script>().TargetMark_begin(); // метод эффекта плавного увеличения при появлении маркера
+
+            // устанавливаем каждому выбранному тик-таку точку движения
+            foreach (GameObject character in selectedCharacters)
+            {
+                character.GetComponent<character_controller_script>().target = walkPoint;
+            }
+        }
+    }
+
+    // метод уничтожения маркера перемещения
+    private void DestroyWalkMarker()
+    {
+        if (walkPoint != null) Destroy(walkPoint);
+    }
+
+    /// <summary>
+    /// --------------------МЕТОДЫ РАБОТЫ ОБЛАСТИ ВЫБОРА--------------------
+    /// </summary>
+
+    // Обновление позиции и размера области выбора
+    private void SelectionAre_PositionAndSize()
+    {
+        ///когда клавиша выбора удерживается, создаётся область выбора. 
+        ///она всегда находится между местом, где началось нажатие, и где курсор сейчас
+        ///размер области выбора подстраивается так, чтобы диагональные углы касались точки начала и курсора
+
+        // Преобразование координат курсора в мировые координаты
+        Ray ray = mainCamera.ScreenPointToRay(mousePos);
+
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit, laserRange, ~ignoreLayers))
+        {
+            // Получаем текущую позицию курсора
+            Vector3 currentPosition = laserMark.transform.position;
+
+            // Вычисляем вектор между начальной и текущей позицией
+            Vector3 direction = currentPosition - laserStartPosition;
+
+            // Вычисляем длины катетов прямоугольного треугольника
+            float xScale = Mathf.Abs(direction.x);
+            float zScale = Mathf.Abs(direction.z);
+
+            // Устанавливаем позицию префаба по центру вектора
+            selectionAre.transform.position = laserStartPosition + direction / 2f + new Vector3(0, 0.3f, 0);
+
+            // Устанавливаем размер префаба по катетам
+            selectionAre.transform.localScale = new Vector3(xScale * MarksOffset, 1f, zScale * MarksOffset);
+        }
+    }
+
+    /// <summary>
+    /// --------------------МЕТОДЫ РАБОТЫ КЛАВИШИ ВЫБОРА--------------------
+    /// </summary>
+
+    // метод проверки нажатия клавиши выбора (однократного нажатия или удержания)
+    private void HandleKeyPress()
+    {
+        if (Input.GetKeyDown(selectionKey))
+        {
+            selectionKeyPressStartTime = Time.time;
+            laserStartPosition = laserMark.transform.position;
+        }
+
+        if (Input.GetKeyUp(selectionKey))
+        {
+            if (Time.time - selectionKeyPressStartTime < holdTimeThreshold)
+            {
+                OnKeyDown(); // Вызов метода для обработки однократного нажатия
+            }
+            else
+            {
+                OnKeyHold(); // Вызов метода для обработки удержания
+            }
+            OnKeyUp(); // Вызов метода для обработки отпускания клавиши
+        }
+    }
+
+    // клавиша выбора нажата
+    private void OnKeyDown()
+    {
+        //Debug.Log("Клавиша нажата один раз!");
+
+        // Преобразование координат курсора в мировые координаты
+        Ray ray = mainCamera.ScreenPointToRay(mousePos);
+
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit, laserRange, ~ignoreLayers))
+        {
+            // если луч попадает в землю при одиночном нажатии
+            if (hit.collider.gameObject.layer == LayerMask.NameToLayer("ground"))
+            {
+                // если маркер перемещения уже создан - он удаляется
+                // если есть хотя бы один выбранный тик-так - создаём поинт перемещения для них
+                if (walkPoint != null) DestroyWalkMarker();
+                if (selectedCharacters.Count > 0) SpawnWalkPoint();
+            }
+            // если луч попадает в тик-така
+            else if (hit.collider.gameObject.layer == LayerMask.NameToLayer("character"))
+            {
+                if (!Input.GetKey(KeyCode.LeftShift))
+                {
+                    // Выключить флажки на всех объектах в массиве
+                    foreach (GameObject character in selectedCharacters)
+                    {
+                        character.transform.Find("ch_mark").GetComponent<chose_mark_script>().auto_mode = false;
+                    }
+                    // Очистить массив и добавить только текущий объект, если Shift не удерживается
+                    selectedCharacters.Clear();
+                }
+                // Добавить объект в массив, если Shift удерживается
+                if (!selectedCharacters.Contains(hit.collider.gameObject))
+                {
+                    selectedCharacters.Add(hit.collider.gameObject);
+                }
+
+                // Включаем на всех тик-таках маркер, говорящий о том, что тик-так выбран
+                foreach (GameObject character in selectedCharacters)
+                {
+                    character.transform.Find("ch_mark").GetComponent<chose_mark_script>().on = true;
+                    character.transform.Find("ch_mark").GetComponent<chose_mark_script>().auto_mode = true;
+                }
+            }
+        }
+    }
+
+    // клавиша выбора отпущена
+    private void OnKeyUp()
+    {
+        //Debug.Log("Клавиша отпущена!");
+
+        if (selectionAre != null) // Если префаб был создан
+        {
+            Destroy(selectionAre);
+            selectionAre = null;
+        }
+    }
+
+    // клавиша выбора удерживается
+    private void OnKeyHold()
+    {
+        //Debug.Log("Клавиша удерживается!");
+
+        if (selectionAre == null)
+        {
+            // Выключить флажки на всех объектах в массиве
+            foreach (GameObject character in selectedCharacters)
+            {
+                character.transform.Find("ch_mark").GetComponent<chose_mark_script>().auto_mode = false;
+            }
+            // Очистить массив выбранных объектов
+            selectedCharacters.Clear();
+
+            selectionAre = Instantiate(selectionArePrefab); // Создаем префаб
+        }
+
+        // Обновляем позицию и размер префаба
+        SelectionAre_PositionAndSize();
+    }
+
+    // сброс выбора тик-таков
+    private void HandleRightClick()
+    {
+        if (Input.GetMouseButtonDown(1))
+        {
+            // Очистить массив выбранных объектов
+            // Выключить флажки на всех объектах в массиве
+            foreach (GameObject character in selectedCharacters)
+            {
+                character.transform.Find("ch_mark").GetComponent<chose_mark_script>().auto_mode = false;
+            }
+            selectedCharacters.Clear();
+        }
+    }
+}
