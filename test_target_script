@@ -1,0 +1,132 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class test_target_script : MonoBehaviour
+{
+    [Header("Настройки")]
+    public bool auto_mode = true; // Режим авто по умолчанию включен
+    public float rotationSpeed = 10f; // Скорость вращения
+    public float pulseAmplitude = 0.1f; // Амплитуда пульсации (изменение размера)
+    public float pulseFrequency = 1f; // Частота пульсации
+    public float minAlpha = 0.8f; // Минимальная непрозрачность
+    public float scaleSpeed = 2f; // Скорость увеличения/уменьшения
+    public float scaleTime = 1f; // Время изменения размера (в секундах)
+    public float rotationSpeedMultiplier = 2f; // Ускорение вращения во время изменения размера
+
+    // Состояние
+    private SpriteRenderer spriteRenderer; // Ссылка на компонент SpriteRenderer
+    private float startTime; // Время начала изменения размера
+    private float currentRotationSpeed; // Текущая скорость вращения
+
+    void Start()
+    {
+        TargetMark_begin();
+    }
+
+    void Update()
+    {
+        UpdateScale();
+        UpdateRotation();
+        UpdatePulseAndAlpha();
+        //HandleInput();
+    }
+
+    /// <summary>
+    /// --------------------МЕТОДЫ РАБОТЫ КЛАВИШ--------------------
+    /// </summary>
+    // Метод появления и исчезновения маркера
+    // Я его использовал, чтобы проверить и отрегулировать появление и исчезновение маркеров, но сейчас он в программе не нужен
+    void HandleInput()
+    {
+        if (auto_mode == false && Input.GetKeyDown(KeyCode.Q))
+        {
+            // Увеличиваем размер до единичного
+            startTime = Time.time; // Запоминаем текущее время
+            auto_mode = true;
+        }
+
+        if (auto_mode == true && Input.GetKeyDown(KeyCode.E))
+        {
+            // Уменьшаем размер до 0
+            startTime = Time.time; // Запоминаем текущее время
+            auto_mode = false;
+        }
+    }
+
+    /// <summary>
+    /// --------------------МЕТОДЫ ЭФФЕКТОВ МАРКЕРА--------------------
+    /// </summary>
+
+    // метод изменяет размер маркера в зависимости от того, активен маркер или нет
+    void UpdateScale()
+    {
+        float t = (Time.time - startTime) / scaleTime;
+        if (auto_mode)
+        {
+            // Плавно увеличиваем размер до единичного за scaleTime секунд
+            transform.localScale = Vector3.Lerp(Vector3.zero, Vector3.one, t);
+        }
+        else
+        {
+            // Плавно уменьшаем размер до 0 за scaleTime секунд
+            transform.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, t);
+        }
+    }
+
+    // метод отвечает за вращение маркера, и за ускорение вращения, если размер маркера меньше 1
+    void UpdateRotation()
+    {
+        if (auto_mode && (Time.time - startTime) / scaleTime < 0.8f)
+        {
+            // Вращаем с увеличенной скоростью во время изменения размера
+            currentRotationSpeed = rotationSpeed * rotationSpeedMultiplier;
+        }
+        // Вращение вокруг оси Y
+        transform.Rotate(Vector3.up * currentRotationSpeed * Time.deltaTime);
+    }
+    // метод отвечает за пульсацию и мерцание маркера
+    void UpdatePulseAndAlpha()
+    {
+        // Если размер достиг единицы, включаем вращение, пульсацию и изменение непрозрачности
+        if (auto_mode && (Time.time - startTime) / scaleTime >= 1f)
+        {
+            // Пульсация
+            float pulse = Mathf.Sin(Time.time * pulseFrequency * 2 * Mathf.PI) * pulseAmplitude;
+            transform.localScale = Vector3.one + Vector3.one * pulse;
+
+            // Изменение непрозрачности
+            float alpha = Mathf.Lerp(minAlpha, 1f, Mathf.InverseLerp(-pulseAmplitude, pulseAmplitude, pulse));
+            spriteRenderer.color = new Color(spriteRenderer.color.r, spriteRenderer.color.g, spriteRenderer.color.b, alpha);
+        }
+    }
+
+    // публичный метод для активации эффекта плавного появления маркера выбораы
+    public void TargetMark_begin()
+    {
+        // Задаем начальный размер равным 0
+        transform.localScale = Vector3.zero;
+
+        // Получаем компонент SpriteRenderer
+        Transform child = transform.Find("Crosshair_25");
+        spriteRenderer = child.GetComponent<SpriteRenderer>();
+
+        // Начальная скорость вращения
+        currentRotationSpeed = rotationSpeed;
+
+        startTime = Time.time; // Запоминаем текущее время
+        auto_mode = true;
+    }
+
+    // публичный метод для активации эффекта затухания
+    public void TargetMark_end()
+    {
+        if (auto_mode)
+        {
+            // Уменьшаем размер до 0
+            startTime = Time.time; // Запоминаем текущее время
+            auto_mode = false;
+        }
+        if (transform.localScale.x < 0.1f) Destroy(this.gameObject); 
+    }
+}
