@@ -1,0 +1,39 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AI;
+
+public class character_controller_script : MonoBehaviour
+{
+    public GameObject target; // цель для перемещения
+
+    private NavMeshAgent agent;
+    
+    void Start()
+    {
+        agent = GetComponent<NavMeshAgent>();
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        GoToTheTarget(); // метод поиска пути и перемещения к цели
+    }
+
+    // метод поиска пути и перемещения к цели
+    void GoToTheTarget()
+    {
+        if (target != null)
+        {
+            agent.SetDestination(target.transform.position);
+        }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.name == "test_point(Clone)")
+        {
+            other.GetComponent<test_target_script>().TargetMark_end();
+        }
+    }
+}
