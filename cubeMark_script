@@ -1,0 +1,42 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class cubeMark_script : MonoBehaviour
+{
+    public Color CanColor;
+    public Color CantColor;
+    private cam_ray_script cr;
+
+    void Start()
+    {
+        cr = Camera.main.gameObject.GetComponent<cam_ray_script>();
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.tag == "brick")
+        {
+            cr.can_build = false;
+        }
+        GetComponent<Renderer>().material.color = CantColor;
+    }
+
+    void OnTriggerStay(Collider other)
+    {
+        if (other.tag == "brick")
+        {
+            cr.can_build = false;
+        }
+        GetComponent<Renderer>().material.color = CantColor;
+    }
+
+    void OnTriggerExit(Collider other)
+    {
+        if (other.tag == "brick")
+        {
+            cr.can_build = true;
+        }
+        GetComponent<Renderer>().material.color = CanColor;
+    }
+}
