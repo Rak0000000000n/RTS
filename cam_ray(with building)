@@ -1,0 +1,187 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class cam_ray_script : MonoBehaviour
+{
+    [Header("Луч")]
+    public bool showLaserMark = true; // Флаг, определяющий, виден ли луч
+    public LayerMask ignoreLayers; // Слои, игнорируемые лучом при столкновении
+    public GameObject laserMarkPrefab; // префаб метки луча
+    private float laserRange = 100000; // Максимальная дистанция луча
+    private GameObject laserMark; // метка, указывающая на столкновение луча с поверхностями
+    private Color laserColor = Color.yellow; // Цвет луча
+    [Space(12)]
+
+    [Header("строительство")]
+    public bool can_build;
+    public int SelectedBrick = 1;
+    public Vector3 bild_rot = Vector3.zero;
+    public GameObject[] CubeMarkPrefab;
+    public GameObject[] BrickPrefab;
+    private GameObject[] CubeMark;
+    [Space(12)]
+
+    [Header("Пространство выбора")]
+    public KeyCode selectionKey; // Клавиша (ЛКМ) применяется для выбора тик-така, создания области выбора и указания тик-таку точки перемещения
+
+    // камера
+    private Camera mainCamera; // Основная камера сцены
+    private Vector3 laserStartPosition; // Начальная позиция луча (задается по позиции камеры)
+    private Vector3 mousePos; // положение курсора
+
+    void Start()
+    {
+        can_build = true;
+        mainCamera = Camera.main;
+        CubeMark = new GameObject[BrickPrefab.Length];
+    }
+
+    void Update()
+    {
+        mousePos = Input.mousePosition;
+
+        HandleLaser(); // Метод для обработки луча
+        HandleKeyPress(); // метод проверки нажатия клавиши выбора (однократного нажатия или удержания)
+        SelectBlock();
+
+    }
+
+    void SelectBlock()
+    {
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            bild_rot += new Vector3(0, 90, 0);
+            if (CubeMark[SelectedBrick - 1] != null)
+            {
+                CubeMark[SelectedBrick - 1].transform.localRotation = Quaternion.Euler(bild_rot);
+            }
+        }
+        if (Input.GetKeyDown(KeyCode.Q))
+        {
+            bild_rot -= new Vector3(0, 90, 0);
+            if (CubeMark[SelectedBrick - 1] != null)
+            {
+                CubeMark[SelectedBrick - 1].transform.localRotation = Quaternion.Euler(bild_rot);
+            }
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+        {
+            DisableCube();
+            SelectedBrick = 1;
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha2))
+        {
+            DisableCube();
+            SelectedBrick = 2;
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha3))
+        {
+            DisableCube();
+            SelectedBrick = 3;
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha4))
+        {
+            DisableCube();
+            SelectedBrick = 4;
+        }
+    }
+    /// <summary>
+    /// --------------------МЕТОДЫ РАБОТЫ ЛУЧА--------------------
+    /// </summary>
+
+    // метод для обработки луча
+    private void HandleLaser()
+    {
+        Ray ray = mainCamera.ScreenPointToRay(mousePos); // Преобразование координат курсора в мировые координаты
+
+        RaycastHit hit;
+
+        // Проверка пересечения луча с объектами
+        if (Physics.Raycast(ray, out hit, laserRange, ~ignoreLayers))
+        {
+            VisualizeLaser(hit.point); // Метод для визуализации луча
+            ManageLaserMark(hit.point); // Метод для управления маркером луча
+            ManagerCube1x1Mark();
+        }
+        else
+        {
+            DisableLaser(); // Метод для отключения визуализации и удаления маркера луча
+            DisableCube();
+        }
+    }
+
+    // Метод для визуализации луча
+    private void VisualizeLaser(Vector3 hitPoint)
+    {
+        Debug.DrawLine(transform.position, hitPoint, laserColor, 0.01f);
+    }
+
+    // Метод для управления маркером луча
+    private void ManageLaserMark(Vector3 hitPoint)
+    {
+        // создаём маркер
+        if (laserMark == null)
+        {
+            laserMark = Instantiate(laserMarkPrefab, transform.position, Quaternion.identity);
+        }
+
+        // Установка позиции маркера в точку пересечения
+        laserMark.transform.position = hitPoint;
+
+        // Изменение прозрачности маркера
+        if (showLaserMark) laserMark.GetComponent<Renderer>().enabled = true;
+        else laserMark.GetComponent<Renderer>().enabled = false;
+    }
+
+    // метод уничтожения маркера лазера
+    private void DisableLaser()
+    {
+        // Отключение визуализации и удаление префаба
+        if (laserMark != null) Destroy(laserMark);
+    }
+
+    void ManagerCube1x1Mark() 
+    {
+        if(laserMark!= null)
+        {
+            // создаём маркер
+            if (CubeMark[SelectedBrick-1] == null)
+            {
+                CubeMark[SelectedBrick - 1] = Instantiate(CubeMarkPrefab[SelectedBrick - 1], transform.position, Quaternion.Euler(bild_rot));
+            }
+
+            // Установка позиции маркера в точку пересечения
+            Vector3 cube_pos = laserMark.transform.position;
+            cube_pos = new Vector3(Mathf.Round(cube_pos.x), cube_pos.y, Mathf.Round(cube_pos.z));
+            CubeMark[SelectedBrick - 1].transform.position = cube_pos;
+        }
+    }
+
+    // метод уничтожения маркера лазера
+    private void DisableCube()
+    {
+        // Отключение визуализации и удаление префаба
+        if (CubeMark[SelectedBrick - 1] != null) Destroy(CubeMark[SelectedBrick - 1]);
+    }
+
+    // метод проверки нажатия клавиши выбора (однократного нажатия или удержания)
+    private void HandleKeyPress()
+    {
+        if (Input.GetKeyUp(selectionKey))
+        {
+            OnKeyDown(); // Вызов метода для обработки однократного нажатия
+        }
+    }
+    // клавиша выбора нажата
+    private void OnKeyDown()
+    {
+        //Debug.Log("Клавиша нажата один раз!");
+
+        if (CubeMark[SelectedBrick - 1] != null && can_build)
+        {
+            Instantiate(BrickPrefab[SelectedBrick - 1], CubeMark[SelectedBrick - 1].transform.position, Quaternion.Euler(bild_rot));
+        }
+    }
+}
